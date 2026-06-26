@@ -3,68 +3,81 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Astra Command Center</title>
+    <title>Spatial Intelligence Platform</title>
     <link rel="icon" href="./src/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="./src/styles.css">
   </head>
   <body>
-    <div class="shell">
-      <header class="command-header" aria-labelledby="page-title">
-        <div>
-          <p class="eyebrow">Astra / Kumbh Spatial Intelligence</p>
-          <h1 id="page-title">Amrit Snan morning surge</h1>
+    <div class="app-shell">
+      <header class="topbar" aria-labelledby="platform-title">
+        <div class="brand-block">
+          <p class="system-label">Government mission control / Maha Kumbh</p>
+          <h1 id="platform-title">Spatial Intelligence Platform</h1>
         </div>
-        <div class="header-status" aria-live="polite">
-          <span class="status-dot"></span>
-          <span id="scenario-clock">05:30</span>
-          <span id="scenario-label">Scenario active</span>
-        </div>
+        <section class="kpi-strip" id="kpi-strip" aria-label="Mission KPIs"></section>
       </header>
 
-      <main class="dashboard" aria-label="Astra command center dashboard">
-        <section class="route-panel panel" aria-labelledby="route-title">
-          <div class="section-heading">
-            <p class="eyebrow">Spatial graph</p>
-            <h2 id="route-title">Pilgrim flow toward Sangam</h2>
+      <div class="mission-layout">
+        <aside class="sidebar" id="sidebar" aria-labelledby="layers-title">
+          <div class="sidebar-head">
+            <div>
+              <p class="system-label">Map layers</p>
+              <h2 id="layers-title">Operational overlays</h2>
+            </div>
+            <button class="icon-button" id="sidebar-toggle" type="button" aria-label="Collapse layer sidebar">&lt;&lt;</button>
           </div>
-          <div class="route-map" id="route-map" aria-label="Kumbh route graph"></div>
-        </section>
-
-        <section class="center-column" aria-label="Operational metrics">
-          <article class="thesis-card panel">
-            <p class="eyebrow">Prediction</p>
-            <h2 id="bridge-thesis">Main Bridge crosses safe capacity in 12 minutes.</h2>
-            <p id="bridge-explainer">
-              High inflow from Entry Gate during the Amrit Snan window is pushing the primary bridge toward critical density.
-            </p>
-          </article>
-
-          <section class="metric-grid" id="metric-grid" aria-label="Live pressure cards"></section>
-        </section>
-
-        <aside class="recommendation-panel panel" aria-labelledby="recommendation-title">
-          <div class="section-heading">
-            <p class="eyebrow">Recommended action</p>
-            <h2 id="recommendation-title">Redirect before the bottleneck forms</h2>
-          </div>
-          <div class="recommendation-callout">
-            <span class="callout-token">Route B</span>
-            <p>Redirect <strong>35%</strong> of Entry Gate flow and meter the main bridge approach.</p>
-          </div>
-          <dl class="impact-list" id="impact-list"></dl>
-          <div class="communication-box">
-            <p class="eyebrow">Communication</p>
-            <p>Activate public announcement, variable message display, and volunteer instruction at Entry Gate.</p>
-          </div>
+          <div class="layer-list" id="layer-list"></div>
         </aside>
-      </main>
 
-      <section class="timeline-panel panel" aria-labelledby="timeline-title">
-        <div>
-          <p class="eyebrow">Scenario playback</p>
-          <h2 id="timeline-title">Amrit Snan pressure curve</h2>
+        <main class="map-workspace" aria-label="Digital twin map workspace">
+          <section class="map-toolbar" aria-label="Map controls">
+            <div>
+              <p class="system-label">Digital twin</p>
+              <h2>Sector 7 / Sangam approach</h2>
+            </div>
+            <div class="toolbar-actions">
+              <span>Live scenario</span>
+              <strong id="scenario-clock">05:30</strong>
+            </div>
+          </section>
+
+          <section class="digital-twin" id="route-map" aria-label="Interactive map showing nodes, paths, heatmap, and emergency routes"></section>
+
+          <section class="camera-dock" id="camera-dock" aria-label="Camera feeds with crowd detection"></section>
+
+          <aside class="copilot-card" aria-label="AI Copilot recommendation">
+            <div class="copilot-head">
+              <span class="copilot-orb"></span>
+              <div>
+                <p class="system-label">AI Copilot</p>
+                <h2>Ask the graph</h2>
+              </div>
+            </div>
+            <p class="copilot-query">"What should we do at Bridge-02 in the next 10 minutes?"</p>
+            <p id="copilot-answer">Redirect 35% of Entry Gate flow to Route B. Keep blue emergency lane open and send volunteer team V-12.</p>
+          </aside>
+        </main>
+
+        <aside class="inspector" aria-labelledby="inspector-title">
+          <p class="system-label">Selected node</p>
+          <h2 id="inspector-title">Bridge-02</h2>
+          <div class="node-status critical">Critical risk</div>
+          <div class="confidence-gauge" id="confidence-gauge" aria-label="AI confidence gauge"></div>
+          <dl class="inspector-list" id="inspector-list"></dl>
+          <section class="recommendation-box">
+            <p class="system-label">AI Recommendation</p>
+            <p id="inspector-recommendation">Redirect flow to Route B and meter the main bridge approach.</p>
+          </section>
+        </aside>
+      </div>
+
+      <section class="event-timeline" aria-labelledby="timeline-title">
+        <div class="timeline-title-block">
+          <p class="system-label">Event stream</p>
+          <h2 id="timeline-title">Observation -> Prediction -> Recommendation -> Action</h2>
         </div>
-        <div class="timeline-controls" id="timeline-controls" role="list"></div>
+        <div class="timeline-events" id="timeline-events"></div>
+        <div class="timeline-controls" id="timeline-controls" role="list" aria-label="Scenario playback controls"></div>
       </section>
     </div>
 

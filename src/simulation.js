@@ -6,10 +6,11 @@ export const nodes = [
   { id: "main-bridge", name: "Main Bridge", capacity: 1200, type: "bottleneck" },
   { id: "route-b", name: "Route B", capacity: 950, type: "alternate" },
   { id: "sangam-ghat", name: "Sangam Ghat", capacity: 2200, type: "ritual" },
+  { id: "temple", name: "Temple", capacity: 1600, type: "ritual" },
   { id: "exit-route", name: "Exit Route", capacity: 1500, type: "exit" },
   { id: "medical-camp", name: "Medical Camp", capacity: 260, type: "medical" },
   { id: "river-safety-post", name: "River Safety Post", capacity: 120, type: "rescue" },
-  { id: "toilet-block", name: "Toilet Block", capacity: 900, type: "civic" },
+  { id: "toilet-block", name: "Toilet T2", capacity: 900, type: "civic" },
   { id: "water-atm", name: "Water ATM", capacity: 750, type: "civic" }
 ];
 
@@ -21,6 +22,9 @@ export const edges = [
   { from: "entry-gate", to: "route-b", label: "25% default" },
   { from: "main-bridge", to: "sangam-ghat", label: "primary path" },
   { from: "route-b", to: "sangam-ghat", label: "alternate path" },
+  { from: "sangam-ghat", to: "temple", label: "ritual corridor" },
+  { from: "temple", to: "medical-camp", label: "service lane" },
+  { from: "sangam-ghat", to: "toilet-block", label: "amenity path" },
   { from: "sangam-ghat", to: "exit-route", label: "exit" }
 ];
 
@@ -37,6 +41,7 @@ export const scenarioSteps = [
       "main-bridge": 690,
       "route-b": 220,
       "sangam-ghat": 980,
+      "temple": 420,
       "exit-route": 280,
       "medical-camp": 34,
       "river-safety-post": 18,
@@ -60,6 +65,7 @@ export const scenarioSteps = [
       "main-bridge": 820,
       "route-b": 300,
       "sangam-ghat": 1240,
+      "temple": 560,
       "exit-route": 340,
       "medical-camp": 48,
       "river-safety-post": 24,
@@ -83,6 +89,7 @@ export const scenarioSteps = [
       "main-bridge": 960,
       "route-b": 360,
       "sangam-ghat": 1620,
+      "temple": 880,
       "exit-route": 410,
       "medical-camp": 72,
       "river-safety-post": 36,
@@ -106,6 +113,7 @@ export const scenarioSteps = [
       "main-bridge": 805,
       "route-b": 610,
       "sangam-ghat": 1780,
+      "temple": 920,
       "exit-route": 570,
       "medical-camp": 86,
       "river-safety-post": 42,
@@ -117,6 +125,27 @@ export const scenarioSteps = [
     minutesToCritical: 26,
     confidence: 0.78
   }
+];
+
+export const layerCatalog = [
+  { id: "crowd", label: "Crowd", active: true },
+  { id: "cameras", label: "Cameras", active: true },
+  { id: "nodes", label: "Nodes", active: true },
+  { id: "paths", label: "Paths", active: true },
+  { id: "heatmap", label: "Heatmap", active: true },
+  { id: "risk-zones", label: "Risk zones", active: true },
+  { id: "toilets", label: "Toilets", active: false },
+  { id: "medical", label: "Medical", active: true },
+  { id: "police", label: "Police", active: true },
+  { id: "river", label: "River", active: true },
+  { id: "weather", label: "Weather", active: false },
+  { id: "infrastructure", label: "Infrastructure", active: true }
+];
+
+export const cameraFeeds = [
+  { id: "CAM-14", label: "Bridge east approach", count: 384, confidence: 0.88 },
+  { id: "CAM-18", label: "Bridge exit ramp", count: 292, confidence: 0.84 },
+  { id: "DRONE-03", label: "Sangam aerial", count: 742, confidence: 0.81 }
 ];
 
 export function calculateCongestion(population, capacity) {
@@ -174,6 +203,86 @@ export function getNodeCapacity(nodeId) {
 
 export function getNodePopulation(step, nodeId) {
   return step.populations[nodeId] ?? 0;
+}
+
+export function getMissionKpis(step) {
+  const totalCrowd = Object.values(step.populations).reduce((total, value) => total + value, 0);
+  const managedCoreNodeIds = ["entry-gate", "main-bridge", "route-b", "sangam-ghat", "toilet-block", "water-atm"];
+  const managedCorePopulation = managedCoreNodeIds.reduce((total, nodeId) => total + getNodePopulation(step, nodeId), 0);
+  const managedCoreCapacity = managedCoreNodeIds.reduce((total, nodeId) => total + getNodeCapacity(nodeId), 0);
+  const bridgeProjection = projectBridgeRisk(step);
+  const activeAlerts = countActiveAlerts(step, bridgeProjection);
+
+  return [
+    { label: "Crowd", value: totalCrowd.toLocaleString(), trend: "+18% / 15m", tone: "neutral" },
+    { label: "Capacity", value: `${Math.round((managedCorePopulation / managedCoreCapacity) * 100)}%`, trend: "core area", tone: "watch" },
+    { label: "Risk", value: titleCase(bridgeProjection.riskLabel), trend: "Bridge-02", tone: bridgeProjection.riskLabel },
+    { label: "Incidents", value: "2", trend: "1 medical, 1 access", tone: "neutral" },
+    { label: "Active alerts", value: String(activeAlerts), trend: "3 priority", tone: "critical" },
+    { label: "Weather", value: "18°C", trend: "clear / 3 km vis", tone: "stable" }
+  ];
+}
+
+export function getInspectorNode(step, nodeId) {
+  const projection = projectBridgeRisk(step);
+  const impact = calculateDiversionImpact(step, 0.35);
+  const currentPopulation = getNodePopulation(step, nodeId);
+
+  return {
+    id: "Bridge-02",
+    name: "Main Bridge",
+    capacity: getNodeCapacity(nodeId),
+    currentPopulation,
+    predictedPopulation: projection.projectedPopulation,
+    riskScore: projection.projectedScore,
+    inflow: step.bridgeIncoming,
+    outflow: Math.max(projection.projectedPopulation - currentPopulation, 0) + impact.gateMeteringRelief - 106,
+    emergencyAccess: "Restricted east lane / blue route open",
+    connectedCameras: ["CAM-14", "CAM-18", "DRONE-03"],
+    recommendation: "Redirect 35% of Entry Gate flow to Route B and meter bridge approach for 8 minutes.",
+    confidence: projection.confidence
+  };
+}
+
+export function getEventTimeline(step, projection, impact) {
+  return [
+    {
+      time: step.time,
+      type: "Observation",
+      summary: `CAM-14 detects ${getNodePopulation(step, "main-bridge").toLocaleString()} people at Bridge-02`
+    },
+    {
+      time: "+03m",
+      type: "Prediction",
+      summary: `Bridge-02 reaches ${Math.round(projection.projectedScore * 100)}% projected capacity in ${projection.minutesToCritical} min`
+    },
+    {
+      time: "+04m",
+      type: "Recommendation",
+      summary: `Divert 35% flow to Route B; expected capacity drops to ${Math.round(impact.afterScore * 100)}%`
+    },
+    {
+      time: "+05m",
+      type: "Operator action",
+      summary: "PA message queued; volunteer team V-12 assigned to Entry Gate"
+    }
+  ];
+}
+
+function countActiveAlerts(step, bridgeProjection) {
+  const pressureNodes = ["entry-gate", "main-bridge", "sangam-ghat", "toilet-block", "water-atm"];
+  const pressureAlerts = pressureNodes.filter((nodeId) => {
+    const score = nodeId === "main-bridge"
+      ? bridgeProjection.projectedScore
+      : calculateCongestion(getNodePopulation(step, nodeId), getNodeCapacity(nodeId));
+    return score >= 0.74;
+  }).length;
+
+  return pressureAlerts + 1;
+}
+
+function titleCase(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function round2(value) {

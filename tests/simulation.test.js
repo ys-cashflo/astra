@@ -5,7 +5,10 @@ import {
   calculateCongestion,
   calculateDiversionImpact,
   classifyRisk,
+  getEventTimeline,
   getActiveScenarioStep,
+  getInspectorNode,
+  getMissionKpis,
   projectBridgeRisk,
   scenarioSteps
 } from "../src/simulation.js";
@@ -52,3 +55,50 @@ test("calculateDiversionImpact estimates lower bridge pressure after diversion",
   assert.equal(impact.reduction, 0.27);
 });
 
+test("getMissionKpis summarizes command center state for the active step", () => {
+  const step = getActiveScenarioStep(2);
+  const kpis = getMissionKpis(step);
+
+  assert.deepEqual(kpis.map((kpi) => kpi.label), [
+    "Crowd",
+    "Capacity",
+    "Risk",
+    "Incidents",
+    "Active alerts",
+    "Weather"
+  ]);
+  assert.equal(kpis[0].value, "10,378");
+  assert.equal(kpis[1].value, "72%");
+  assert.equal(kpis[2].value, "Critical");
+  assert.equal(kpis[4].value, "6");
+});
+
+test("getInspectorNode returns Bridge-02 operational details", () => {
+  const step = getActiveScenarioStep(2);
+  const inspector = getInspectorNode(step, "main-bridge");
+
+  assert.equal(inspector.id, "Bridge-02");
+  assert.equal(inspector.currentPopulation, 960);
+  assert.equal(inspector.predictedPopulation, 1128);
+  assert.equal(inspector.riskScore, 0.94);
+  assert.equal(inspector.inflow, 410);
+  assert.equal(inspector.outflow, 242);
+  assert.equal(inspector.confidence, 0.82);
+  assert.deepEqual(inspector.connectedCameras, ["CAM-14", "CAM-18", "DRONE-03"]);
+});
+
+test("getEventTimeline returns ordered observation to action events", () => {
+  const step = getActiveScenarioStep(2);
+  const projection = projectBridgeRisk(step);
+  const impact = calculateDiversionImpact(step, 0.35);
+  const events = getEventTimeline(step, projection, impact);
+
+  assert.deepEqual(events.map((event) => event.type), [
+    "Observation",
+    "Prediction",
+    "Recommendation",
+    "Operator action"
+  ]);
+  assert.equal(events[1].summary, "Bridge-02 reaches 94% projected capacity in 12 min");
+  assert.equal(events[2].summary, "Divert 35% flow to Route B; expected capacity drops to 67%");
+});
