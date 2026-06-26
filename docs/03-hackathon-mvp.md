@@ -6,6 +6,8 @@ Build a working proof of concept that demonstrates crowd flow intelligence for a
 
 The demo should show that disconnected visual observations can update a spatial graph, forecast movement, identify congestion risk, and recommend operational actions.
 
+The MVP should feel specific to Kumbh, not like a generic crowd dashboard. It should include ritual-driven demand, transport inflow, a ghat bottleneck, one alternate route, one medical/rescue node, and one communication action.
+
 ## Non-Goal
 
 The MVP must not attempt to build the full platform.
@@ -25,30 +27,38 @@ These are valid future features, but they are distractions for a 1-day demo.
 
 ## Demo Story
 
-The command center sees four operational nodes:
+The command center sees a small Kumbh route network:
 
 ```text
-Parking -> Gate A -> Bridge -> Sangam Ghat
-                 \-> Route B -> Sangam Ghat
+Railway Station ----\
+Bus Stand -----------> Entry Gate -> Main Bridge -> Sangam Ghat -> Exit Route
+Parking Zone -------/       \------> Route B ------/
+                                      |
+Sangam Ghat -> Medical Camp
+Sangam Ghat -> River Safety Post
 ```
 
-Every 30 seconds, the system receives simulated camera observations:
+Every 30 seconds, the system receives simulated observations:
 
+- Railway station exit population
+- Bus stand exit population
 - Parking population
-- Gate A population
-- Bridge population
+- Entry Gate population
+- Main Bridge population
 - Route B population
 - Sangam Ghat population
+- Medical or river safety status
 
 The graph updates current state, predicts the next 10-15 minutes, flags congestion risk, and recommends intervention.
 
 Example output:
 
 ```text
-Bridge will reach 92% safe capacity in 12 minutes.
-Expected inflow from Gate A: 410 people.
+Main Bridge will reach 94% safe capacity in 12 minutes.
+Expected inflow from Entry Gate: 410 people.
 Recommended action: redirect 35% of crowd through Route B.
-Expected impact: reduce Bridge congestion score from 0.86 to 0.61.
+Expected impact: reduce Main Bridge congestion score from 0.94 to 0.67.
+Communication: public announcement + volunteer instruction at Entry Gate.
 Confidence: 0.82.
 ```
 
@@ -60,21 +70,33 @@ Represent a small event area as nodes and edges.
 
 Minimum nodes:
 
-- Parking
-- Gate A
-- Bridge
+- Railway Station
+- Bus Stand
+- Parking Zone
+- Entry Gate
+- Main Bridge
 - Route B
 - Sangam Ghat
 - Medical Camp
+- River Safety Post
+- Toilet Block
+- Water ATM
 
 Minimum edges:
 
-- Parking to Gate A
-- Gate A to Bridge
-- Bridge to Sangam Ghat
-- Gate A to Route B
+- Railway Station to Entry Gate
+- Bus Stand to Entry Gate
+- Parking Zone to Entry Gate
+- Entry Gate to Main Bridge
+- Main Bridge to Sangam Ghat
+- Entry Gate to Route B
 - Route B to Sangam Ghat
 - Sangam Ghat to Medical Camp
+- Sangam Ghat to River Safety Post
+- Sangam Ghat to Toilet Block
+- Sangam Ghat to Water ATM
+
+If the build is running behind, keep Toilet Block and Water ATM in JSON but hide them from the first dashboard.
 
 ### 2. Observation Ingestion
 
@@ -133,10 +155,12 @@ Display risk by color:
 Generate simple operational recommendations:
 
 - Redirect crowd to alternate route
-- Temporarily slow entry at gate
+- Temporarily slow entry at Entry Gate
 - Deploy volunteers
 - Notify medical team
+- Notify river safety team
 - Close or restrict a path
+- Trigger public announcement or message display
 
 Recommendation priority is based on predicted congestion score and time to threshold.
 
@@ -188,7 +212,9 @@ Required sample files:
 - `nodes.json`
 - `edges.json`
 - `sensors.json`
+- `ritual-calendar.json`
 - `scenario-events.json`
+- `recommendation-rules.json`
 
 Optional sample inputs:
 
@@ -196,6 +222,15 @@ Optional sample inputs:
 - Mock camera thumbnails
 - Weather conditions
 - Manual incident report
+
+Use public and synthetic data together:
+
+- Booklet facts for domain assumptions.
+- OpenStreetMap for route and facility references.
+- Official government/public pages for event dates and facility claims.
+- Synthetic sensor data for the repeatable demo scenario.
+
+See [Kumbh MVP And Data Strategy](05-kumbh-mvp-and-data-strategy.md) for the full data plan.
 
 ## Judging Narrative
 
@@ -247,4 +282,3 @@ Hours 10-11:
 Hour 12:
 
 - Dry run, fix edge cases, and prepare final pitch.
-
