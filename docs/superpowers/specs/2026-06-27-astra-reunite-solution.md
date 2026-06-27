@@ -157,6 +157,10 @@ The UI should show:
 
 This is a special case. A husband may report his wife missing, while the wife reports the husband missing at another desk. Astra should detect reciprocal reports and convert them into a **separation incident** rather than two unrelated searches.
 
+Core idea:
+
+> Stop searching for two independent missing people. Treat the event as one group separation problem and route both people toward verified safe rendezvous points.
+
 Detection signals:
 
 - Each report names the other person as companion or reporter.
@@ -164,13 +168,57 @@ Detection signals:
 - Same last-known group location.
 - Compatible times and nearby zones.
 - Both reports mention separation from family/group.
+- Reporter name in one report matches missing-person name in another.
+- Shared meeting point, travel group, vehicle, bus, camp, hotel, village, or pilgrimage group.
 
-Response:
+Separation incident model:
+
+```text
+SeparationIncident {
+  id
+  linkedReportIds[]
+  people[]              // each person may be reporter, missing subject, or located subject
+  separationPointNodeId
+  lastKnownNodeIds[]
+  safeRendezvousNodeIds[]
+  status                // suspected | linked | reconnecting | reunited | split_back_to_cases
+  confidence
+  timeline[]
+}
+```
+
+Operating flow:
+
+```text
+reciprocal reports detected
+-> flag possible separation incident
+-> operator reviews match evidence
+-> link reports into one incident
+-> stop duplicate search expansion
+-> identify shared separation zone
+-> identify nearest safe rendezvous/help points
+-> notify staff at those points with both descriptions
+-> keep any located person at a verified help point
+-> route mobile person to nearest official help point
+-> verify relationship and handover
+-> mark reunited
+```
+
+Response strategy:
 
 - Link both people into one incident.
-- Search for the pair's likely convergence points: original meeting point, nearest help desk, PA announcement point, lost-and-found center, and high-visibility landmarks.
+- Search for the pair's likely convergence points: original meeting point, nearest help desk, PA announcement point, police booth, lost-and-found center, and high-visibility landmarks.
 - Notify staff with both descriptions.
+- Avoid asking both people to keep walking around looking for each other.
+- If one person is already at a help point, keep them there and route the other person toward the safest verified rendezvous point.
 - Reunite either person with the nearest verified help point before attempting full family handover.
+
+Console behavior:
+
+- Show reciprocal evidence: "Ramesh reports Sita missing" and "Sita reports Ramesh missing."
+- Show shared geography: same/nearby last-seen zone, time gap, and likely separation point.
+- Recommend one action: "Link as separation incident and route both to Panchavati Help Desk."
+- Offer operator controls: `Link as separation incident`, `Keep as separate cases`, `Mark one person located`, `Assign rendezvous point`, and `Notify rendezvous staff`.
 
 **Lost and found items**
 
