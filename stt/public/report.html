@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Astra — Voice Report Intake</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 32px auto; padding: 0 16px; color: #1e293b; }
+    h1 { font-size: 22px; margin-bottom: 2px; }
+    .sub { color: #64748b; margin-top: 0; font-size: 14px; }
+    .row { display: flex; gap: 12px; align-items: center; margin: 18px 0; flex-wrap: wrap; }
+    button { font-size: 16px; padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
+    #rec { background: #4338ca; color: #fff; min-width: 210px; text-align: center; }
+    #rec.recording { background: #b91c1c; }
+    #reset { background: #e2e8f0; color: #334155; }
+    button:disabled { opacity: .5; cursor: default; }
+    select { padding: 10px; font-size: 15px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    #status { font-size: 14px; color: #64748b; min-height: 20px; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #b91c1c; margin-right: 6px; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: .3; } }
+    .ask { margin: 16px 0; padding: 14px 18px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; font-size: 16px; line-height: 1.5; }
+    .ask.done { background: #ecfdf5; border-color: #6ee7b7; }
+    .heard { font-size: 13px; color: #64748b; font-style: italic; margin: 6px 0 0; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; font-size: 14px; }
+    td { padding: 7px 10px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+    td.k { color: #64748b; width: 190px; }
+    td.v { color: #0f172a; }
+    tr.missing td.k::after { content: " •"; color: #dc2626; }
+    tr.missing td.v { color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <h1>🛟 Astra — Voice Report Intake</h1>
+  <p class="sub">Tap “Speak” and talk in any language, then tap “Stop” to send. The assistant fills the form and asks back for the important missing details — keep answering by voice.</p>
+
+  <div class="row">
+    <button id="rec" style="touch-action:none; user-select:none;">🎙️ Speak</button>
+    <select id="lang">
+      <option value="">Auto-detect language</option>
+      <option value="hi">Hindi</option>
+      <option value="ta">Tamil</option>
+      <option value="mr">Marathi</option>
+      <option value="te">Telugu</option>
+      <option value="bn">Bengali</option>
+      <option value="en">English</option>
+    </select>
+    <button id="reset">↺ New report</button>
+  </div>
+
+  <div id="status">Ready. Tap “Speak” and describe the missing person.</div>
+  <div id="ask" class="ask" hidden></div>
+  <p id="heard" class="heard"></p>
+
+  <table id="form"></table>
+
+  <script>
+    const FIELDS = [
+      "type","person_name","gender","age_band","language",
+      "origin_state","origin_district","physical_description",
+      "last_seen_text","reporter_mobile","remarks",
+    ];
+
+    const recBtn = document.getElementById("rec");
+    const resetBtn = document.getElementById("reset");
+    const langSel = document.getElementById("lang");
+    const statusEl = document.getElementById("status");
+    const askEl = document.getElementById("ask");
+    const heardEl = document.getElementById("heard");
+    const formEl = document.getElementById("form");
+
+    let report = null;            // accumulating report state
+    let mediaRecorder, chunks = [], timer, seconds = 0;
+    let state = "idle";           // idle | starting | recording
+
+    renderForm({}, []);
+
+    // Tap to start, tap again to stop & send.
+    recBtn.onclick = () => {
+      if (recBtn.disabled) return;
+      if (state === "recording") stop();
+      else if (state === "idle") start();
+    };
+
+    resetBtn.onclick = () => {
+      report = null;
+      askEl.hidden = true; heardEl.textContent = "";
+      statusEl.textContent = "New report. Tap “Speak” and talk.";
+      renderForm({}, []);
+    };
+
+    // Record in a format the browser supports AND the STT accepts. Chrome gives
+    // webm/opus, Safari gives mp4/aac — we must label the file to match, or Groq
+    // rejects it ("not a valid media file").
+    function pickMime() {
+      if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
+      const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+      return types.find((t) => MediaRecorder.isTypeSupported(t)) || "";
+    }
+    function extFor(mime) {
+      if (/mp4|m4a|aac/i.test(mime)) return "m4a";
+      if (/ogg/i.test(mime)) return "ogg";
+      if (/wav/i.test(mime)) return "wav";
+      return "webm";
+    }
+
+    async function start() {
+      state = "starting";
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mime = pickMime();
+        mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        chunks = [];
+        mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          send(new Blob(chunks, { type: mediaRecorder.mimeType || mime }));
+        };
+        mediaRecorder.start();
+        state = "recording"; seconds = 0;
+        recBtn.textContent = "■ Stop & send"; recBtn.classList.add("recording");
+        statusEl.innerHTML = '<span class="dot"></span>Listening… 0s';
+        timer = setInterval(() => { seconds++; statusEl.innerHTML = `<span class="dot"></span>Listening… ${seconds}s`; }, 1000);
+      } catch (err) {
+        state = "idle";
+        statusEl.textContent = "⚠️ " + err.name + ": " + err.message;
+      }
+    }
+
+    function stop() {
+      if (state !== "recording") return;
+      state = "idle";
+      clearInterval(timer);
+      recBtn.textContent = "🎙️ Speak"; recBtn.classList.remove("recording");
+      recBtn.disabled = true;
+      statusEl.textContent = "Transcribing & understanding…";
+      mediaRecorder.stop();
+    }
+
+    async function send(blob) {
+      // Too short / empty: a quick tap captures only a container header → STT 400.
+      if (!blob || blob.size < 1500) {
+        statusEl.textContent = "Didn't catch that — tap “Speak” and talk a little longer.";
+        recBtn.disabled = false;
+        return;
+      }
+      try {
+        const fd = new FormData();
+        fd.append("audio", blob, "clip." + extFor(blob.type));
+        if (report) fd.append("report", JSON.stringify(report));
+        const lang = langSel.value ? `?language=${langSel.value}` : "";
+        const res = await fetch(`/voice-report${lang}`, { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        heardEl.textContent = data.text ? `🗣️ heard: “${data.text}”` : "(no speech detected)";
+        report = data.report || report;
+        renderForm(report || {}, data.missing || []);
+
+        if (data.complete) {
+          askEl.className = "ask done";
+          askEl.textContent = "✅ All the key details are captured. You can add more, or start a new report.";
+          askEl.hidden = false;
+          statusEl.textContent = "Report ready.";
+        } else if (data.clarifyingQuestion) {
+          askEl.className = "ask";
+          askEl.textContent = "❓ " + data.clarifyingQuestion;
+          askEl.hidden = false;
+          speak(data.clarifyingQuestion, data.language);
+          statusEl.textContent = "Tap “Speak” to answer.";
+        } else {
+          askEl.hidden = true;
+          statusEl.textContent = "Got it. Tap “Speak” to add more.";
+        }
+      } catch (err) {
+        statusEl.textContent = "⚠️ " + err.message;
+      } finally {
+        recBtn.disabled = false;
+      }
+    }
+
+    function renderForm(r, missing) {
+      formEl.innerHTML = FIELDS.map((k) => {
+        const miss = missing.includes(k);
+        const val = r[k] == null || r[k] === "" ? "—" : String(r[k]);
+        return `<tr class="${miss ? "missing" : ""}"><td class="k">${k}</td><td class="v">${esc(val)}</td></tr>`;
+      }).join("");
+    }
+
+    function esc(s) { return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+
+    // Read the question aloud so a non-reading reporter can answer hands-free.
+    // Prefer the server's neural voice (/speak); fall back to the best browser voice.
+    async function speak(text, language) {
+      try {
+        const res = await fetch("/speak", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, language }),
+        });
+        if (res.ok) {
+          const { audioBase64, contentType } = await res.json();
+          if (audioBase64) {
+            await new Audio(`data:${contentType};base64,${audioBase64}`).play();
+            return;
+          }
+        }
+      } catch {}
+      browserSpeak(text, language); // no TTS key configured / offline → built-in voice
+    }
+
+    // Browser fallback, made natural: match the reporter's language and pick the
+    // highest-quality available voice (Google/Natural/Neural/online) instead of a
+    // robotic default English one.
+    const LANG2PREFIX = {
+      hindi: "hi", tamil: "ta", marathi: "mr", telugu: "te",
+      bengali: "bn", kannada: "kn", malayalam: "ml", gujarati: "gu",
+      punjabi: "pa", english: "en",
+    };
+    let VOICES = [];
+    const loadVoices = () => { VOICES = window.speechSynthesis ? speechSynthesis.getVoices() : []; };
+    loadVoices();
+    if (window.speechSynthesis) speechSynthesis.onvoiceschanged = loadVoices;
+
+    // Names of Indian-accented voices shipped by macOS / Windows / Google.
+    const INDIAN_VOICE = /(rishi|veena|lekha|heera|ravi|hemant|kalpana|aditi|raveena|priya|isha|neel|prabhat|india|indian|हिन्दी|हिंदी)/i;
+
+    function pickVoice(prefix) {
+      const cands = VOICES.filter((v) => v.lang.toLowerCase().startsWith(prefix));
+      if (!cands.length) return null;
+      const score = (v) =>
+        (/-in$/i.test(v.lang) ? 4 : 0) +                 // Indian region (e.g. en-IN) wins
+        (INDIAN_VOICE.test(v.name) ? 3 : 0) +            // Indian-named voice
+        (/(google|natural|neural|premium|enhanced|online)/i.test(v.name) ? 2 : 0) +
+        (v.localService ? 0 : 1);
+      return cands.sort((a, b) => score(b) - score(a))[0];
+    }
+
+    // Script of the question text — far more reliable than the language label for
+    // choosing a usable voice (e.g. Marathi & Hindi share Devanagari).
+    function scriptPrefixes(text) {
+      if (/[ऀ-ॿ]/.test(text)) return ["mr", "hi", "ne", "sa"]; // Devanagari → Hindi voice reads it
+      if (/[஀-௿]/.test(text)) return ["ta"];                   // Tamil
+      if (/[ఀ-౿]/.test(text)) return ["te"];                   // Telugu
+      if (/[ঀ-৿]/.test(text)) return ["bn", "as"];            // Bengali
+      if (/[ಀ-೿]/.test(text)) return ["kn"];                   // Kannada
+      if (/[ഀ-ൿ]/.test(text)) return ["ml"];                   // Malayalam
+      if (/[઀-૿]/.test(text)) return ["gu"];                   // Gujarati
+      if (/[਀-੿]/.test(text)) return ["pa"];                   // Gurmukhi
+      return ["en"];
+    }
+
+    function browserSpeak(text, language) {
+      try {
+        if (!VOICES.length) loadVoices(); // voices can load async after first paint
+        const key = String(language || "").toLowerCase();
+        const labelPrefix = LANG2PREFIX[key] || key.split(/[-_]/)[0];
+        // Try the detected language first, then any voice for the text's script.
+        const order = [labelPrefix, ...scriptPrefixes(text)].filter(Boolean);
+        let v = null, used = order[0];
+        for (const p of order) { v = pickVoice(p); if (v) { used = p; break; } }
+
+        const u = new SpeechSynthesisUtterance(text);
+        if (v) { u.voice = v; u.lang = v.lang; }
+        else { u.lang = used === "en" ? "en-IN" : used + "-IN"; }
+        u.rate = 0.95; u.pitch = 1; // slightly slower reads warmer/clearer
+        speechSynthesis.cancel();
+        speechSynthesis.speak(u);
+
+        // No Indic voice installed at all → tell the user how to get real audio.
+        if (!v && used !== "en") {
+          statusEl.textContent = "🔇 No " + used + " voice on this device — set a Sarvam/OpenAI TTS key for natural audio.";
+        }
+      } catch {}
+    }
+  </script>
+</body>
+</html>

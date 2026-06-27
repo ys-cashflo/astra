@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Astra STT — Voice Capture</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #1e293b; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .sub { color: #64748b; margin-top: 0; font-size: 14px; }
+    .row { display: flex; gap: 12px; align-items: center; margin: 20px 0; }
+    button { font-size: 16px; padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
+    #rec { background: #4338ca; color: #fff; }
+    #rec.recording { background: #b91c1c; }
+    button:disabled { opacity: .5; cursor: default; }
+    select { padding: 10px; font-size: 15px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    #status { font-size: 14px; color: #64748b; min-height: 20px; }
+    #out { margin-top: 16px; padding: 16px; background: #f1f5f9; border-radius: 8px; min-height: 60px; font-size: 16px; line-height: 1.5; white-space: pre-wrap; }
+    .meta { font-size: 12px; color: #94a3b8; margin-top: 8px; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #b91c1c; margin-right: 6px; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: .3; } }
+    .help { margin-top: 12px; padding: 12px 16px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; font-size: 14px; line-height: 1.5; }
+    .help ul { margin: 8px 0; padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <h1>🎤 Astra — Voice Capture</h1>
+  <p class="sub">Record a voice note, then transcribe it via the STT service.</p>
+
+  <div class="row">
+    <button id="rec">● Start recording</button>
+    <select id="lang">
+      <option value="">Auto-detect</option>
+      <option value="hi">Hindi</option>
+      <option value="ta">Tamil</option>
+      <option value="mr">Marathi</option>
+      <option value="te">Telugu</option>
+      <option value="bn">Bengali</option>
+      <option value="en">English</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label for="file" style="font-size:14px;color:#64748b;">…or upload an audio file:</label>
+    <input id="file" type="file" accept="audio/*" />
+  </div>
+
+  <div id="status">Ready.</div>
+  <div id="help" class="help" hidden>
+    <strong>Microphone is blocked.</strong> To enable it:
+    <ul>
+      <li><b>Chrome:</b> click the 🔒/ⓘ icon left of the address bar → <b>Site settings</b> → <b>Microphone → Allow</b> → reload.</li>
+      <li><b>macOS:</b> System Settings → Privacy &amp; Security → Microphone → enable your browser, then quit &amp; reopen it.</li>
+    </ul>
+    Meanwhile you can use <b>Upload an audio file</b> above — it transcribes the same way.
+  </div>
+  <div id="out">Transcript will appear here…</div>
+  <div class="meta" id="meta"></div>
+
+  <script>
+    const recBtn = document.getElementById("rec");
+    const langSel = document.getElementById("lang");
+    const statusEl = document.getElementById("status");
+    const outEl = document.getElementById("out");
+    const metaEl = document.getElementById("meta");
+    const helpEl = document.getElementById("help");
+    const fileEl = document.getElementById("file");
+
+    let mediaRecorder, chunks = [], recording = false, timer, seconds = 0;
+
+    recBtn.onclick = async () => {
+      if (!recording) await start();
+      else stop();
+    };
+
+    // Fallback: transcribe an uploaded audio file (works without mic permission).
+    fileEl.onchange = () => {
+      if (fileEl.files[0]) {
+        statusEl.textContent = "Transcribing file…";
+        transcribe(fileEl.files[0]);
+      }
+    };
+
+    async function start() {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new DOMException("Not supported in this browser", "NotSupportedError");
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        helpEl.hidden = true;
+        mediaRecorder = new MediaRecorder(stream);
+        chunks = [];
+        mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          transcribe(new Blob(chunks, { type: mediaRecorder.mimeType }));
+        };
+        mediaRecorder.start();
+        recording = true;
+        seconds = 0;
+        recBtn.textContent = "■ Stop";
+        recBtn.classList.add("recording");
+        statusEl.innerHTML = '<span class="dot"></span>Recording… 0s';
+        timer = setInterval(() => {
+          seconds++;
+          statusEl.innerHTML = `<span class="dot"></span>Recording… ${seconds}s`;
+        }, 1000);
+      } catch (err) {
+        if (err.name === "NotAllowedError" || err.name === "SecurityError") {
+          statusEl.textContent = "⚠️ Microphone permission blocked.";
+          helpEl.hidden = false;
+        } else if (err.name === "NotFoundError") {
+          statusEl.textContent = "⚠️ No microphone found on this device.";
+        } else {
+          statusEl.textContent = "⚠️ " + err.name + ": " + err.message;
+        }
+      }
+    }
+
+    function stop() {
+      clearInterval(timer);
+      recording = false;
+      recBtn.textContent = "● Start recording";
+      recBtn.classList.remove("recording");
+      statusEl.textContent = "Transcribing…";
+      recBtn.disabled = true;
+      mediaRecorder.stop();
+    }
+
+    async function transcribe(blob) {
+      try {
+        const fd = new FormData();
+        fd.append("audio", blob, "clip.webm");
+        const lang = langSel.value ? `?language=${langSel.value}` : "";
+        const res = await fetch(`/transcribe${lang}`, { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        outEl.textContent = data.text || "(no speech detected)";
+        const detected = data.language ? ` · detected: ${data.language}` : "";
+        metaEl.textContent = `${data.provider}/${data.model}${detected}`;
+        statusEl.textContent = "Done.";
+      } catch (err) {
+        outEl.textContent = "";
+        statusEl.textContent = "⚠️ " + err.message;
+      } finally {
+        recBtn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
