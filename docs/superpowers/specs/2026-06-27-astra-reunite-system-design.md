@@ -81,6 +81,7 @@ Missing-person intake should specifically capture:
 ```text
 MissingPersonReport {
   subjectProfile       // child | elderly | adult, age band, gender if known
+  persona              // MissingPersonPersona, may be partial at report time
   clothing             // color, type, distinctive markers
   lastSeenLocation
   lastSeenTime
@@ -100,6 +101,86 @@ MissingPersonReport {
   optionalPhotoRef
 }
 ```
+
+The missing-person persona should explicitly model both identity and likely behavior. This can start sparse and be enriched over time.
+
+```text
+MissingPersonPersona {
+  // Identity and appearance
+  name
+  aliases[]
+  personType           // child | elderly | adult | disabled | medically_vulnerable
+  approxAgeOrAgeBand
+  genderIfKnown
+  heightRange
+  build
+  clothingColor
+  clothingType
+  distinctiveMarkers   // spectacles, walking stick, cap, shawl, tilak, limp, bag color
+  recentPhotoRef
+  photoFreshness       // today | recent | old | unknown
+
+  // Language, literacy, and communication
+  spokenLanguages[]
+  primaryLanguage
+  canReadSigns         // yes | no | unknown
+  educationOrLiteracy  // cannot_read | basic | can_read_signs | educated | unknown
+  communicationAbility // speaks_clearly | hard_of_hearing | speech_impaired | nonverbal | confused | unknown
+  canShareName         // yes | no | unknown
+  knowsFamilyNumber    // yes | no | unknown
+
+  // Mobility, health, and safety
+  mobility             // normal | slow | wheelchair | needs_support | injured | unknown
+  mentalState          // calm | confused | memory_loss | distressed | nonverbal | unknown
+  medicalCondition     // diabetes | heart | epilepsy | dementia | pregnancy | injury | other | none | unknown
+  medicationNeeded     // yes | no | unknown
+  hasAssistiveDevice   // cane | wheelchair | hearing_aid | glasses | none | unknown
+  visionOrHearingIssue // yes | no | unknown
+
+  // Resources and ability to leave area
+  hasPhone             // yes | no | unknown
+  phoneReachable       // reachable | no_answer | switched_off | not_with_person | unknown
+  phoneType            // smartphone | feature_phone | none | unknown
+  hasMoney             // none | small_cash | enough_for_food | enough_for_transport | unknown
+  hasIDCard            // yes | no | unknown
+  hasTagOrQR           // yes | no | unknown
+  canUseTransportAlone // yes | no | unknown
+
+  // Behavior and navigation
+  familiarWithArea     // local | visited_before | first_time | unknown
+  lostBehaviorProfile  // waits_where_lost | goes_to_help_desk | follows_crowd | returns_to_bus | searches_for_family | goes_to_destination | likely_to_panic | unknown
+  likelyReactionNotes
+  knownLandmarksRemembered[]
+
+  // Origin and relationship context
+  homeState
+  homeDistrict
+  villageOrCity
+  travelGroupName
+  campOrStayLocation
+  busOrVehicleInfo
+  tourOperatorOrGroupLeader
+  plannedMeetingPoint
+  knownCompanionNames[]
+  familyMemberNames[]
+  familyPhoneNumbers[]
+
+  // Possessions and clues
+  possessions[]        // phone, bag, bottle, medicine, ticket, prayer item, wallet
+  importantItemNotes
+}
+```
+
+Persona fields should feed:
+
+- Search radius and movement speed.
+- Area-of-interest ranking.
+- Exit and transport risk.
+- Semantic search.
+- Relationship-aware matching.
+- Staff language routing.
+- Medical priority.
+- Safe handover requirements.
 
 The report should support staged completion:
 
