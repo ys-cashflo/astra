@@ -359,6 +359,24 @@ Once a person leaves the bounded ghat/search cell, likely outbound movement is n
 
 Places like Panchavati / Ramkund access, Godavari ghat approaches, and Sadhugram gates should be treated as pedestrian pressure cells. Search teams should not only be sent to the nearest point; they should be routed along walkable access, with crush-risk and emergency access considered.
 
+### 2027 planning changes to account for
+
+The 2027 setup appears to be actively changing the physical operating graph. Astra should therefore ingest the latest authority layers before the event rather than freezing the model around historic Ramkund/Trimbak assumptions.
+
+Known planning implications:
+
+- **New ghat infrastructure.** Planned new bathing ghats in Nashik city and Trimbakeshwar mean the search graph should include newly created ghat segments, not only legacy Ramkund/Kushavart nodes.
+- **Designated entry/exit routes.** Ghat development includes planned entry-exit routes, emergency access, lighting, sanitation, changing rooms, police chowkies, and watch towers. These become first-class SKG nodes for reporting, verification, camera tasking, and perimeter alerts.
+- **Linear river stretch.** If the Nashik ghats expand across a longer Godavari stretch, the search cell should become a chain of sub-cells along the river rather than one Ramkund circle.
+- **Road and encroachment clearance.** Routes around Malegaon Stand, Ramkund, Godaghat, Sarda Circle, Dwarka Circle, Dindori Road, and Panchavati temple surroundings may become cleaner pedestrian corridors during the event. The graph should treat these as planned movement corridors, not merely generic roads.
+- **Parking and transfer reshaping.** Multi-level parking, temporary lots, shuttle routes, bus stands, and Nashik Road railway access should be modeled as spillover cells because missing-person uncertainty rises sharply once someone reaches a transfer point.
+- **Telecom hardening.** Planned 5G, Cells on Wheels, network slicing, and emergency communication backhaul should support official staff alerts and radius notifications, but still should not be assumed as person-level phone tracking unless specifically authorized for a verified case.
+- **Emergency siren/alert locations.** Sirens and public-alert points can become notification amplifiers and physical landmarks for staff instructions.
+
+Design consequence:
+
+> Nashik Reunite should use an **operational graph version** for each event phase: ordinary day, peak bathing day, route closure, ghat opening, emergency diversion, and post-event dispersal. Missing-person search should run on the graph that is true at that moment.
+
 ### What this changes in Astra Reunite
 
 The engine should compute a **bounded search cell** before it computes a radius:
