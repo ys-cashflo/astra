@@ -40,6 +40,7 @@ MVP features:
 - Found-person form with current location, approximate description, communication status, and optional tag/item/photo ref.
 - Lost/found item form with category, location, description, and linked person/case if known.
 - Input role label: public, family, volunteer, police, medical, support, camera operator, control room.
+- Progressive enrichment flow: create the case quickly first, then ask follow-up questions that narrow search and matching.
 
 Missing-person intake should specifically capture:
 
@@ -58,6 +59,129 @@ MissingPersonReport {
   optionalTagId
   optionalPhotoRef
 }
+```
+
+The report should support staged completion:
+
+```text
+stage1_critical      // enough to create provisional case and initial search cell
+stage2_narrowing     // enough to improve radius, destination, and semantic matching
+stage3_connection    // enough to identify family/known people and safe handover
+stage4_safety        // enough to raise priority or route to medical/police support
+```
+
+### Stage 1 - Critical Fields
+
+These fields create the report in under 30 seconds:
+
+```text
+personType            // child | elderly | adult | disabled | medically_vulnerable
+approxAgeOrAgeBand
+genderIfKnown
+clothingColor
+clothingType
+lastSeenLocation
+lastSeenTime
+intendedActivity      // snan | food | toilet | medical | rest | shopping | transport | meeting_point | unknown
+reporterName
+reporterContact
+relationshipToPerson
+```
+
+If only these fields are known, Astra can still:
+
+- Create a provisional case.
+- Identify the search cell.
+- Estimate elapsed time and reachable area.
+- Rank initial Areas of Interest.
+- Start verification.
+
+### Stage 2 - Search-Narrowing Fields
+
+These fields should be requested after the case exists, or by another staff member while search begins:
+
+```text
+intendedDestination
+plannedRouteHint
+mobility              // normal | slow | wheelchair | needs_support | injured | unknown
+mentalState           // calm | confused | memory_loss | distressed | nonverbal | unknown
+spokenLanguages[]
+canReadSigns          // yes | no | unknown
+familiarWithArea      // local | visited_before | first_time | unknown
+hasPhone              // yes | no | unknown
+phoneReachable        // reachable | no_answer | switched_off | not_with_person | unknown
+hasMoney              // none | small_cash | enough_for_food | enough_for_transport | unknown
+hasIDCard             // yes | no | unknown
+hasTagOrQR            // yes | no | unknown
+```
+
+How these narrow search:
+
+- `spokenLanguages` routes alerts to matching-language staff and helps identify regional groups.
+- `canReadSigns` changes whether help desks/signage are strong attractors.
+- `hasPhone` and `phoneReachable` decide whether this is a call-guided rendezvous or field search.
+- `hasMoney` changes transport-exit risk. Enough money for transport raises bus, parking, auto/taxi, and railway priority.
+- `mobility` changes reachable radius.
+- `mentalState` changes attractor weights toward help desks, water, shade, medical, police, and seated areas.
+- `familiarWithArea` changes whether the person may navigate to known landmarks versus follow crowd flow.
+
+### Stage 3 - Connection Fields
+
+These fields help identify family, known people, and travel groups:
+
+```text
+homeState
+homeDistrict
+villageOrCity
+primaryLanguage
+otherLanguages[]
+travelGroupName
+campOrStayLocation
+busOrVehicleInfo
+tourOperatorOrGroupLeader
+plannedMeetingPoint
+knownCompanionNames[]
+familyMemberNames[]
+familyPhoneNumbers[]
+sameVillageOrGroupContacts[]
+recentPhotoRef
+```
+
+How these help:
+
+- Connect found people to family even without tag/phone.
+- Detect reciprocal separation incidents.
+- Rank known contacts from same village, bus, camp, or travel group.
+- Let a help desk ask the right question: "Are you with the Patna bus group?" instead of only "What is your name?"
+
+### Stage 4 - Safety And Priority Fields
+
+These fields affect urgency, routing, and who should respond:
+
+```text
+medicalCondition      // diabetes | heart | epilepsy | dementia | pregnancy | injury | other | none | unknown
+medicationNeeded      // yes | no | unknown
+lastMealOrWater       // recent | long_time | unknown
+hasAssistiveDevice    // cane | wheelchair | hearing_aid | glasses | none | unknown
+visionOrHearingIssue  // yes | no | unknown
+panicRisk             // low | medium | high | unknown
+specialCareNotes
+```
+
+How these help:
+
+- Medical risk boosts urgency and medical-camp search.
+- Missing glasses/hearing aid changes communication strategy.
+- Dementia/memory loss increases rest/help/medical attractor priority.
+- Medication need can turn a normal search into critical priority.
+
+Each new field should re-run:
+
+```text
+search compression
+semantic report search
+relationship-aware matching
+notification/task recommendation
 ```
 
 Why this matters:
