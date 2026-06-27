@@ -70,6 +70,7 @@ Inputs:
 MVP features:
 
 - Quick report form with person type, age band, clothing, last-seen location, last-seen time, intended destination/activity, reporter role/contact, optional photo ref, optional tag ID.
+- Agent-assisted intake by voice, chat, or typed transcript. The agent extracts fields, asks for missing critical information, pre-fills the form, and creates a provisional report once enough information exists.
 - Reporting context on every report: who reported it, where they reported from, when they reported, and whether they are family, volunteer, police, medical, staff, or public.
 - Found-person form with current location, approximate description, communication status, and optional tag/item/photo ref.
 - Lost/found item form with category, location, description, and linked person/case if known.
@@ -101,6 +102,79 @@ MissingPersonReport {
   optionalPhotoRef
 }
 ```
+
+Report creation should support three entry paths:
+
+1. **Structured form.** Used by admin, police, medical staff, support staff, volunteers, family, or public-facing help desks. The form captures Stage 1 first, then continues enrichment without delaying the first search.
+2. **Talk-to-agent intake.** The reporter can speak or type naturally. The agent extracts fields, shows a pre-filled report, asks only for missing critical information, and records both the raw transcript and structured values.
+3. **Edge report or sighting.** A volunteer, police officer, medical worker, support worker, or camera operator can submit a fast observation. This may create a sighting, found-person case, duplicate signal, reciprocal separation candidate, or full missing-person case depending on the match result.
+
+Agent-assisted report flow:
+
+```text
+reporter starts form, voice agent, chat agent, tag scan, or staff console entry
+-> raw input is captured with reporter role and reporting location
+-> structured fields are extracted with confidence and source phrases
+-> critical missing fields are identified
+-> agent asks targeted follow-up questions
+-> extracted answers pre-fill the report
+-> duplicate and reciprocal separation checks run
+-> verification status is assigned
+-> provisional or verified case is created
+-> search radius and semantic matching run immediately
+-> volunteer and admin UIs receive role-appropriate results
+-> every step is written as an event
+```
+
+The agent should not replace the form. It should make the form faster, especially for elderly, multilingual, stressed, or low-literacy reporters.
+
+```text
+ReportIntakeSession {
+  id
+  channel              // form | voice_agent | chat_agent | tag_scan | staff_console | volunteer_edge
+  reporterRole         // family | public | volunteer | police | medical | support | camera_operator | admin
+  reporterName
+  reporterContact
+  reporterLocation
+  reportingNodeId
+  rawTranscript
+  extractedFields[]
+  missingCriticalFields[]
+  agentQuestionsAsked[]
+  verificationStatus   // unverified | staff_verified | duplicate_suspected | verified | rejected
+  createdCaseId
+  createdSightingId
+  createdAt
+  updatedAt
+}
+
+ExtractedField {
+  fieldName
+  value
+  confidence
+  sourcePhrase
+  needsConfirmation
+  confirmedByActorId
+}
+```
+
+Agent follow-up should be targeted, not a long questionnaire. Example questions:
+
+- "Where did you last see them?"
+- "Around what time?"
+- "What color and type of clothing were they wearing?"
+- "Where were they supposed to go next?"
+- "Are they a child, elderly person, disabled, or medically vulnerable?"
+- "Do they have a phone, money, ID, or tag?"
+- "What language will they understand?"
+- "Who is reporting this, and where are you now?"
+
+Minimum creation rule:
+
+- If Stage 1 critical fields are complete, create a case.
+- If Stage 1 is incomplete but risk is high, create a provisional case and mark missing fields.
+- If the report is only an observation, create a sighting and run semantic/spatial matching against active cases.
+- If the report appears to match an existing active case, show a duplicate/merge recommendation instead of creating a parallel incident by default.
 
 The missing-person persona should explicitly model both identity and likely behavior. This can start sparse and be enriched over time.
 
@@ -969,11 +1043,40 @@ Out of scope for MVP:
 
 ## MVP Console Features
 
+### Role-Specific UI Surfaces
+
+Volunteer UI should be mobile-first and action-focused:
+
+- `Report missing person`
+- `Report found person`
+- `Report sighting`
+- `Scan tag/QR`
+- `Report lost item`
+- `Report found item`
+- Voice/text agent entry for fast reporting, with current location attached.
+- Immediate public-safe result card after submission.
+- Next-action instructions: `Keep person here`, `Guide to help desk`, `Request staff confirmation`, `Link as sighting`, `Possible active case nearby`.
+- No full family contact reveal unless authorized by control room or verified staff.
+
+Admin and control-room UI should be verification and coordination focused:
+
+- Intake queue for new reports, agent-created drafts, edge sightings, tag scans, and unverified submissions.
+- Agent transcript plus extracted fields, confidence, and source phrases.
+- Missing critical fields panel.
+- Duplicate, reciprocal separation, and merge recommendations.
+- Case create, verify, reject, merge, split, and escalate controls.
+- Map panel with search radius, Areas of Interest, sightings, exits, volunteer locations, help desks, and camera notes.
+- Semantic search across active reports and raw notes.
+- Tasking panel for volunteers, police, medical, camera operators, exits, and rendezvous points.
+- Case timeline and audit log.
+
 ### Must Build
 
 - Lost & Found console route/view.
 - Active incident list with priority and status.
 - Quick report intake.
+- Agent-assisted report intake with extracted fields, missing-field prompts, and pre-filled report review.
+- Report intake session records with raw transcript, channel, reporter context, extracted fields, and verification status.
 - Elderly-friendly, multilingual-aware intake controls.
 - Verification panel.
 - Registry search and duplicate detection.
@@ -986,6 +1089,8 @@ Out of scope for MVP:
 - Relationship-aware match panel.
 - Task panel for volunteers, cameras, exits, and rendezvous points.
 - Volunteer-assisted reporting result cards.
+- Volunteer mobile UI for missing/found/sighting/tag/item reports and safe next-action cards.
+- Admin intake queue for agent drafts, verification, duplicate handling, and report creation.
 - Event timeline.
 - Offline demo mode and local event queue.
 - Raw notes with extracted structured hints.
@@ -1074,6 +1179,15 @@ Out of scope for MVP:
 5. Volunteer keeps the person at Water ATM 2 and requests staff confirmation.
 6. Help desk confirms the match and reunites the family.
 
+### Scenario 7 - Agent Assisted Intake
+
+1. A stressed family member says: "My father is missing. He is around 72, wearing a white kurta, last seen near Ramkund around 2 PM. We were going for food."
+2. The agent extracts age band, clothing, last-seen place/time, relationship, and intended activity.
+3. The agent asks only for missing critical fields: reporter name/contact, current reporting location, language, and medical risk.
+4. The pre-filled report is shown to staff for confirmation.
+5. Astra creates a provisional case, runs duplicate checks, assigns verification status, and starts the search radius engine.
+6. Admin sees the intake transcript, extracted fields, missing-field trail, and recommended first search cell.
+
 ## Build Order Recommendation
 
 1. Data model and seeded Reunite dataset.
@@ -1091,6 +1205,11 @@ Out of scope for MVP:
 
 Unit tests:
 
+- ReportIntakeSession creation from form, agent, tag scan, staff console, and volunteer edge channels.
+- Agent extraction into MissingPersonReport and MissingPersonPersona fields.
+- Missing critical field detection.
+- Targeted follow-up question selection.
+- Extracted-field confirmation and provenance.
 - Verification transitions.
 - Duplicate report merge.
 - Reciprocal separation detection.
@@ -1112,6 +1231,9 @@ Unit tests:
 Browser smoke tests:
 
 - Create and verify missing report.
+- Create agent-assisted report from raw text, review pre-filled fields, answer missing prompts, and submit.
+- Confirm admin intake queue shows transcript, extracted fields, confidence, and verification controls.
+- Submit volunteer edge sighting and receive public-safe next-action card.
 - Generate search prediction.
 - Add crowd sighting and camera note.
 - Create Cluster of Attention.
