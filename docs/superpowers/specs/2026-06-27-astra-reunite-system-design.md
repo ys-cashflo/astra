@@ -105,6 +105,7 @@ intendedDestination
 plannedRouteHint
 mobility              // normal | slow | wheelchair | needs_support | injured | unknown
 mentalState           // calm | confused | memory_loss | distressed | nonverbal | unknown
+lostBehaviorProfile   // waits_where_lost | goes_to_help_desk | follows_crowd | returns_to_bus | searches_for_family | goes_to_destination | likely_to_panic | unknown
 spokenLanguages[]
 canReadSigns          // yes | no | unknown
 familiarWithArea      // local | visited_before | first_time | unknown
@@ -123,7 +124,21 @@ How these narrow search:
 - `hasMoney` changes transport-exit risk. Enough money for transport raises bus, parking, auto/taxi, and railway priority.
 - `mobility` changes reachable radius.
 - `mentalState` changes attractor weights toward help desks, water, shade, medical, police, and seated areas.
+- `lostBehaviorProfile` converts family intuition into search behavior: some people wait, some follow crowds, some return to transport, and some go to the planned destination.
 - `familiarWithArea` changes whether the person may navigate to known landmarks versus follow crowd flow.
+
+Behavior profile options:
+
+```text
+waits_where_lost       -> boost last-seen micro-area, nearby shade/seating, nearby help desk
+goes_to_help_desk      -> boost help desks, police booths, PA points, medical camps
+follows_crowd          -> boost dominant crowd-flow direction and high-flow paths
+returns_to_bus         -> boost bus stands, parking, shuttle points, group camp, outbound gates
+searches_for_family    -> boost original route, meeting point, last family location, landmarks
+goes_to_destination    -> boost intended destination/activity nodes
+likely_to_panic        -> boost nearby safe staff points; reduce assumption of planned route
+unknown                -> rely on person type, mobility, intent, crowd flow, and signals
+```
 
 ### Stage 3 - Connection Fields
 
@@ -404,6 +419,7 @@ Inputs:
 - Search cell.
 - Last-seen node and time.
 - Intended destination and activity.
+- Lost behavior profile.
 - Current time.
 - Walkable graph.
 - Crowd-flow direction.
@@ -435,6 +451,7 @@ MVP features:
 - Compute elapsed time.
 - Compute reachable nodes along graph edges.
 - Use intended destination/activity to rank Areas of Interest inside the reachable graph.
+- Use behavior profile to reshape area priorities and exit risk.
 - Rank attractors: medical, water, toilets, seating, help desks, ghats, police.
 - Rank exits by distance, flow direction, and transfer risk.
 - Calculate containment confidence.
@@ -468,15 +485,49 @@ The engine should combine reachable radius with destination intent:
 areaOfInterestScore =
   reachabilityScore
   + destinationIntentScore
+  + behaviorProfileScore
   + attractorScore
   + flowAlignmentScore
   + signalSupportScore
   - safetyRiskPenalty
 ```
 
+Behavior-aware scoring:
+
+```text
+if lostBehaviorProfile = waits_where_lost:
+  boost lastSeenNode, adjacent safe nodes, shade, seating, nearby help desk
+  reduce far exit scores unless sightings support them
+
+if lostBehaviorProfile = goes_to_help_desk:
+  boost help desks, police booths, PA points, medical camps, official signage
+
+if lostBehaviorProfile = follows_crowd:
+  boost dominant crowd-flow paths and downstream nodes
+  watch high-flow exits earlier
+
+if lostBehaviorProfile = returns_to_bus:
+  boost bus stands, parking, shuttle points, group camp, transport exits
+  reduce containment confidence faster
+
+if lostBehaviorProfile = searches_for_family:
+  boost original route, last family location, meeting point, landmarks
+
+if lostBehaviorProfile = goes_to_destination:
+  boost intendedDestination and intendedActivity nodes
+
+if lostBehaviorProfile = likely_to_panic:
+  boost nearby official staff points, medical/help desks, low-risk containment areas
+  avoid over-weighting long planned routes
+```
+
 Example:
 
 > Missing elderly man last seen near Ramkund at 2 PM. Family was going for food near Gate 2. The engine should prioritize reachable food stalls and seating/water points along the Ramkund -> Gate 2 route before generic nearby nodes.
+
+Behavior example:
+
+> Missing adult came by bus and family says he usually returns to the bus if separated. Astra should raise transport-exit risk and prioritize shuttle points, bus stands, parking, and the group's camp over generic ghat attractors.
 
 Out of scope for MVP:
 
